@@ -14,21 +14,19 @@ I am keeping an eye on https://github.com/pulumi/pulumi/issues/13904 pulumi and 
 
 The project will not be publishing packages unless happens some need to do so, for now will use experience collected here and copy parts to real projects.
 
-## Bun scripting the steps
 
-While many steps are just simple shell commands, the real magic of Bun kicks in when things need som customisation. Instead of jumping through bizarre shell-scripting hoops or trying to become a terminal ninja, Bun’s batteries-included toolkit lets me write clean, maintainable logic without the headache.
+# Getting started
 
-Bun isn't just a runtime; it’s a consolidated toolkit that replaces half a dozen separate dev-dependencies.
+## testing
 
-- **Bun Shell (`$`)**: This is the "hoop-jumper" killer. It provides a cross-platform, bash-like environment that lets you run shell commands directly in TypeScript with proper escaping and piping. No more manual child-process spawning or dealing with inconsistent shell behavior across environments.
-- **Lightning-Fast Test Runner**: Built-in and Jest-compatible, this runner is optimized for speed and low memory footprint. It’s perfect for running "smoke tests" against a newly provisioned server to ensure your configs, ports, and permissions are exactly where they should be.
-- **Native SQLite & File I/O**: Bun includes a high-performance SQLite driver and ultra-fast `Bun.write` and `Bun.file` APIs. This makes it trivial to log provisioning results, track state, or quickly read/write system configuration files without importing heavy external libraries.
-- **Zero-Config TypeScript**: (I personally have no plans to do so, at most will use .js and jsdoc). You can if you prefer even  run `.ts` files directly as scripts—no `tsc` or `ts-node` required. This means your provisioning logic can be type-safe from day one, which is a massive upgrade over brittle `.sh` scripts when things get complex.
-- **Growing list of built-ins** - S3, markdown, tar
+If you want to enter shell of the image you just started without changing its default process (you need it running as intended).
+You can use `docker ps` to list active images and then `docker exec -it IMG_ID fish` to execute fish shell.
 
-## Python ?
+`fish.js` - utility script is made so you can run fish shell in last image on the list
 
-I am not a fan, so, no way.
+- `bun fish.js` - bun stays alive until you exit the shell (not optimal, but not too bad)
+- `Invoke-Expression (bun fish.js printcmd)` - otpimised for windows 
+- `exec $(bun fish.js printcmd)` - otpimised for linux 
 
 # Managing applications with minimal downtime
 
@@ -58,19 +56,6 @@ I have a redmine I installed years ago, and sadly did it manually. Now I need to
    - initialize new version 
 - run migration and check if it survived the upgrade
 - if it fails, purge the test instance and tweak the migration script and migrate again
-
-# Getting started
-
-## testing
-
-If you want to enter shell of the image you just started without changing its default process (you need it running as intended).
-You can use `docker ps` to list active images and then `docker exec -it IMG_ID fish` to execute fish shell.
-
-`fish.js` - utility script is made so you can run fish shell in last image on the list
-
-- `bun fish.js` - bun stays alive until you exit the shell (not optimal, but not too bad)
-- `Invoke-Expression (bun fish.js printcmd)` - otpimised for windows 
-- `exec $(bun fish.js printcmd)` - otpimised for linux 
 
 
 # Caveats
@@ -153,4 +138,19 @@ Once you have working bunnyspin layers, you can execute them on a fresh VPS manu
 - **Snapshot Storage**: Cost is approximately €0.01 per GB per month. (2026)
 - Snapshots are stored in your Hetzner Cloud Console under the **Snapshots** tab. They are available project-wide and can be used to launch servers in any location.
 
-#
+
+# Using Bun for executing the steps
+
+While many steps are just simple shell commands, the real magic of Bun kicks in when things need some customisation. Instead of writing complex shell-scripts and trying to become a terminal ninja, Bun’s batteries-included toolkit lets me write clean, maintainable logic without the headache.
+
+Bun isn't just a runtime; it’s a consolidated toolkit that replaces half a dozen separate dev-dependencies.
+
+- **Bun Shell (`$`)**: This is the "hoop-jumper" killer. It provides a cross-platform, bash-like environment that lets you run shell commands directly in TypeScript with proper escaping and piping. No more manual child-process spawning or dealing with inconsistent shell behavior across environments.
+- **Lightning-Fast Test Runner**: Built-in and Jest-compatible, this runner is optimized for speed and low memory footprint. It’s perfect for running "smoke tests" against a newly provisioned server to ensure your configs, ports, and permissions are exactly where they should be.
+- **Native SQLite & File I/O**: Bun includes a high-performance SQLite driver and ultra-fast `Bun.write` and `Bun.file` APIs. This makes it trivial to log provisioning results, track state, or quickly read/write system configuration files without importing heavy external libraries.
+- **Zero-Config TypeScript**: (I personally have no plans to do so, at most will use .js and jsdoc). You can if you prefer even  run `.ts` files directly as scripts—no `tsc` or `ts-node` required. This means your provisioning logic can be type-safe from day one, which is a massive upgrade over brittle `.sh` scripts when things get complex.
+- **Growing list of built-ins** - S3, markdown, tar
+
+## Python ?
+
+I am not a fan, so, no way.
