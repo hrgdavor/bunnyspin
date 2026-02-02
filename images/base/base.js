@@ -10,7 +10,7 @@ await $`echo docker:${isDocker}`
 
 await $`
 echo Install few preferred utils
-apt-get install -y --no-install-recommends curl unzip ca-certificates vim wget git zip xz-utils software-properties-common gnupg btop
+apt-get install -y --no-install-recommends curl unzip ca-certificates vim wget git zip xz-utils software-properties-common gnupg btop sudo
 echo desert color scheme for vim
 echo "colo desert" > /root/.vimrc
 apt-get upgrade -y

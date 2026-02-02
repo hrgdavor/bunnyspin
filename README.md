@@ -14,7 +14,7 @@ I am keeping an eye on https://github.com/pulumi/pulumi/issues/13904 pulumi and 
 
 The project will not be publishing packages unless happens some need to do so, for now will use experience collected here and copy parts to real projects.
 
-## Scripting the steps
+## Bun scripting the steps
 
 While many steps are just simple shell commands, the real magic of Bun kicks in when things need som customisation. Instead of jumping through bizarre shell-scripting hoops or trying to become a terminal ninja, Bun’s batteries-included toolkit lets me write clean, maintainable logic without the headache.
 
@@ -30,7 +30,35 @@ Bun isn't just a runtime; it’s a consolidated toolkit that replaces half a doz
 
 I am not a fan, so, no way.
 
+# Managing applications with minimal downtime
 
+Work in progress section while exploring different needs for succesfully managing apps I need (for start, java, caddy, php, mysql, postgres).
+
+To succesfully manage an application you need to
+
+- know how to install
+- backup
+- upgrade
+- monitor (errors, storage use)
+
+Some can be simply upgraded with short stop, upgrade, start steps, but you will likely be better off if you know how to install 
+specific version manually, and do it in a way that lets you keep multiple versions in parallel (revert might come in handy).
+
+Some like postgres have their own tool to manage upgrades. PG in particular has tools to upgrade version without downtime !!.
+
+## Case 1
+
+I have a redmine I installed years ago, and sadly did it manually. Now I need to learn again how to install it. But this time will take the 
+harder path.
+- learn where are files for backup
+- prepare a script for backup 
+- do a backup
+- prepare a provisioning script that downloads redmine, and prepares an empty instance
+- make a migration script 
+  - copy backup to new test instance
+   - initialize new version 
+- run migration and check if it survived the upgrade
+- if it fails, purge the test instance and tweak the migration script and migrate again
 
 # Getting started
 
