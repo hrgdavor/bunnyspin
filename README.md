@@ -48,8 +48,7 @@ Some like postgres have their own tool to manage upgrades. PG in particular has 
 
 ## Case 1
 
-I have a redmine I installed years ago, and sadly did it manually. Now I need to learn again how to install it. But this time will take the 
-harder path.
+I have a redmine I installed years ago, and sadly did it manually. Now I need to learn again how to install it. But this time will take the harder path.
 - learn where are files for backup
 - prepare a script for backup 
 - do a backup
