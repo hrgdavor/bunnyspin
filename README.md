@@ -1,5 +1,7 @@
 # bunnyspin
 
+TODO, move docker to obsolete or docker folder, and switch to https://linuxcontainers.org/incus/ as it has systemd and looks to be much better option.
+
 Here is a fun (at least for me) take on spinning up servers, whether it is provisioning or whatnot.
 
 I’ve gone all-in on [Bun](https://bun.sh) for this utility; its blazing-fast, batteries-included approach makes it the perfect engine for me when provisioning VPS servers or Docker images, and it should be an equally good fit for other Docker-compatible environments and even bare-metal servers.
