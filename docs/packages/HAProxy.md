@@ -6,7 +6,7 @@
 
 # PPA versus official
 
-Ubuntu's default repositories generally lag **1 to 3 years** behind the latest stable HAProxy release, depending on which Ubuntu LTS version you are using. 
+You probably should use PPA, as Ubuntu's default repositories generally lag **1 to 3 years** behind the latest stable HAProxy release, depending on which Ubuntu LTS version you are using. 
 
 Current Version Gap (as of Feb 2026)
 
