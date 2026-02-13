@@ -19,7 +19,7 @@ if (!ppaInput) {
   process.exit(1);
 }
 // Helper for quiet/verbose logging
-const log = (msg: string) => { if (verbose) console.log(msg); };
+const log = (msg) => { if (verbose) console.log(msg); };
 
 
 const osRelease = readFileSync("/etc/os-release", "utf8");
