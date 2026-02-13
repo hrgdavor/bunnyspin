@@ -1,6 +1,6 @@
 # packages used in provisioning scripts of bunnyspin
 
-Starting with Ubuntu **24.04** [Deb822 format](Deb822.format.md) is used, and old format will likely be removed from this repo.
+Starting with Ubuntu **24.04** [Deb822 format](Deb822.format.md) is used, and old format will likely be removed from bunnyspin.
 
 ## general
 - [software-properties-common](./software-properties-common.md) - you will likely want to use PPA, and is used here for many setups
