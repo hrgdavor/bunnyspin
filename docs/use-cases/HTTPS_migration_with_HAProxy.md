@@ -7,7 +7,7 @@ This can be done in general, can be used for migrating on same machine, or netwo
 Concrete case here is migrating domains with HTTPS from `nginx` to `Caddy` using `HAProxy`, doing it one by one to reduce service disruption.
 Also to have quick option to revert if new Caddy config for specific server has issues (websockets, integrations like PHP or ruby).
 
-SNI (Server Name Indication) makes this possible as it allows HAProxy to transparently forward HTTPS traffic without decryption or holding certificates (read more about it toward end of this document).
+**SNI** (Server Name Indication) makes this possible as it allows HAProxy to transparently forward HTTPS traffic without decryption or holding certificates (read more about it latenr in this document).
 
 
 
