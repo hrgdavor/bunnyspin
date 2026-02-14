@@ -61,7 +61,35 @@ fn haproxyCmd(allocator: Allocator, cmd: []const u8) ![]u8 {
     return try allocator.dupe(u8, buffer[0..bytes_read]);
 }
 
-fn isWhitelisted(config:Config, ip: []const u8) bool {
+// helpers before isWhitelisted
+fn ipToInt(ip: []const u8) !u32 {
+    var parts = mem.split(u8, ip, ".");
+    var result: u32 = 0;
+    var shift: u5 = 24;
+
+    var i: usize = 0;
+    while (parts.next()) |part| : (i += 1) {
+        if (i >= 4) return error.InvalidIp;
+        result |= try std.fmt.parseInt(u8, part, 10) << @intCast(shift);
+        shift -= 8;
+    }
+    return result;
+}
+
+// helpers before isWhitelisted
+fn isIpInCidr(ip: []const u8, cidr: []const u8) bool {
+    const slash_pos = mem.indexOfScalar(u8, cidr, '/') orelse return false;
+    const cidr_ip = cidr[0..slash_pos];
+    const mask_len = std.fmt.parseInt(u5, cidr[slash_pos + 1 ..], 10) catch return false;
+
+    const ip_int = ipToInt(ip) catch return false;
+    const cidr_int = ipToInt(cidr_ip) catch return false;
+    const mask = ~@as(u32, 0) << (32 - mask_len);
+
+    return (ip_int & mask) == (cidr_int & mask);
+}
+
+fn isWhitelisted(config: Config, ip: []const u8) bool {
     const white_file = fs.cwd().openFile(config.white_map, .{ .mode = .read_only }) catch return false;
     defer white_file.close();
 
@@ -75,7 +103,20 @@ fn isWhitelisted(config:Config, ip: []const u8) bool {
             else => return false,
         } orelse break;
 
-        if (mem.startsWith(u8, buf[0..len], ip) and len > ip.len and buf[ip.len] == ' ') {
+        const line = mem.trim(u8, buf[0..len], " \n\r\t");
+        if (line.len == 0) continue;
+
+        // Split line into IP/CIDR and value
+        var parts = mem.split(u8, line, " ");
+        const network = parts.first() orelse continue;
+
+        // Check exact match first (backward compatible)
+        if (mem.eql(u8, network, ip)) {
+            return true;
+        }
+
+        // Check CIDR match
+        if (isIpInCidr(ip, network)) {
             return true;
         }
     }
