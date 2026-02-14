@@ -8,10 +8,43 @@ const ArrayList = std.ArrayList;
 const Allocator = mem.Allocator;
 
 const SOCKET_PATH = "/var/run/haproxy.sock";
-const BAN_MAP = "/etc/haproxy/banlist.map";
-const WHITE_MAP = "/etc/haproxy/whitelist.map";
+const DEFAULT_BAN_MAP = "/etc/haproxy/banlist.map";
+const DEFAULT_WHITE_MAP = "/etc/haproxy/whitelist.map";
 const RATE_THRESHOLD: u32 = 150;
 const BAN_TTL_MS: u64 = 24 * 60 * 60 * 1000;
+
+const Config = struct {
+    ban_map: []const u8,
+    white_map: []const u8,
+    socket_path: []const u8 = SOCKET_PATH,
+};
+
+// Parse config from args and set global paths
+fn parseConfig(allocator: Allocator, args: [][*:0]u8) !Config {
+    var ban_map = DEFAULT_BAN_MAP;
+    var white_map = DEFAULT_WHITE_MAP;
+
+    var i: usize = 1;
+    while (i < args.len) : (i += 1) {
+        const arg = std.mem.span(args[i]);
+        if (mem.startsWith(u8, arg, "--ban-map=")) {
+            ban_map = arg["--ban-map=".len..];
+        } else if (mem.startsWith(u8, arg, "--white-map=")) {
+            white_map = arg["--white-map=".len..];
+        } else if (mem.eql(u8, arg, "--ban-map") and i + 1 < args.len) {
+            i += 1;
+            ban_map = std.mem.span(args[i]);
+        } else if (mem.eql(u8, arg, "--white-map") and i + 1 < args.len) {
+            i += 1;
+            white_map = std.mem.span(args[i]);
+        }
+    }
+
+    return Config{
+        .ban_map = try allocator.dupe(u8, ban_map),
+        .white_map = try allocator.dupe(u8, white_map),
+    };
+}
 
 fn haproxyCmd(allocator: Allocator, cmd: []const u8) ![]u8 {
     var socket = try net.unixSocketConnect(.{ .path = SOCKET_PATH });
@@ -28,8 +61,8 @@ fn haproxyCmd(allocator: Allocator, cmd: []const u8) ![]u8 {
     return try allocator.dupe(u8, buffer[0..bytes_read]);
 }
 
-fn isWhitelisted(ip: []const u8) bool {
-    const white_file = fs.cwd().openFile(WHITE_MAP, .{ .mode = .read_only }) catch return false;
+fn isWhitelisted(config:Config, ip: []const u8) bool {
+    const white_file = fs.cwd().openFile(config.white_map, .{ .mode = .read_only }) catch return false;
     defer white_file.close();
 
     var buf_reader = std.io.bufferedReader(white_file.reader());
@@ -49,10 +82,10 @@ fn isWhitelisted(ip: []const u8) bool {
     return false;
 }
 
-fn whitelistIP(allocator: Allocator, ip: []const u8) !void {
-    _ = try haproxyCmd(allocator, try std.fmt.allocPrint(allocator, "add map {} {} 1", .{ WHITE_MAP, ip }));
+fn whitelistIP(allocator: Allocator, config:Config, ip: []const u8) !void {
+    _ = try haproxyCmd(allocator, try std.fmt.allocPrint(allocator, "add map {} {} 1", .{ config.white_map, ip }));
 
-    var white_file = try fs.cwd().openFile(WHITE_MAP, .{ .mode = .read_write });
+    var white_file = try fs.cwd().openFile(config.white_map, .{ .mode = .read_write });
     defer white_file.close();
 
     try white_file.seekToEnd();
@@ -61,13 +94,13 @@ fn whitelistIP(allocator: Allocator, ip: []const u8) !void {
     std.log.info("WHITELISTED {s}", .{ip});
 }
 
-fn banIP(allocator: Allocator, ip: []const u8) !void {
-    if (isWhitelisted(ip)) return;
+fn banIP(allocator: Allocator, config: Config, ip: []const u8) !void {
+    if (isWhitelisted(config, ip)) return;
 
     const now = time.milliTimestamp();
-    _ = try haproxyCmd(allocator, try std.fmt.allocPrint(allocator, "add map {} {} {}", .{ BAN_MAP, ip, now }));
+    _ = try haproxyCmd(allocator, config, try std.fmt.allocPrint(allocator, "add map {} {} {}", .{ config.ban_map, ip, now }));
 
-    var ban_file = try fs.cwd().openFile(BAN_MAP, .{ .mode = .read_write });
+    var ban_file = try fs.cwd().openFile(config.ban_map, .{ .mode = .read_write });
     defer ban_file.close();
 
     try ban_file.seekToEnd();
@@ -76,10 +109,10 @@ fn banIP(allocator: Allocator, ip: []const u8) !void {
     std.log.info("BANNED {s}", .{ip});
 }
 
-fn unbanIP(allocator: Allocator, ip: []const u8) !void {
-    _ = try haproxyCmd(allocator, try std.fmt.allocPrint(allocator, "del map {} {}", .{ BAN_MAP, ip }));
+fn unbanIP(allocator: Allocator, config: Config, ip: []const u8) !void {
+    _ = try haproxyCmd(allocator, try std.fmt.allocPrint(allocator, "del map {} {}", .{ config.ban_map, ip }));
 
-    var ban_file = try fs.cwd().openFile(BAN_MAP, .{ .mode = .read_write });
+    var ban_file = try fs.cwd().openFile(config.ban_map, .{ .mode = .read_write });
     defer ban_file.close();
 
     var buf_reader = std.io.bufferedReader(ban_file.reader());
@@ -115,9 +148,9 @@ fn unbanIP(allocator: Allocator, ip: []const u8) !void {
     std.log.info("UNBANNED {s}", .{ip});
 }
 
-fn cleanupBans(allocator: Allocator, ) !void {
+fn cleanupBans(allocator: Allocator, config: Config) !void {
     const now = time.milliTimestamp();
-    var ban_file = try fs.cwd().openFile(BAN_MAP, .{ .mode = .read_write });
+    var ban_file = try fs.cwd().openFile(config.ban_map, .{ .mode = .read_write });
     defer ban_file.close();
 
     var buf_reader = std.io.bufferedReader(ban_file.reader());
@@ -148,7 +181,7 @@ fn cleanupBans(allocator: Allocator, ) !void {
             const duped = try allocator.dupe(u8, line);
             try valid_entries.append(duped);
         } else {
-            _ = haproxyCmd(allocator, try std.fmt.allocPrint(allocator, "del map {} {}", .{ BAN_MAP, ip })) catch {};
+            _ = haproxyCmd(allocator, try std.fmt.allocPrint(allocator, "del map {} {}", .{ config.ban_map, ip })) catch {};
             std.log.info("EXPIRED {s}", .{ip});
         }
     }
@@ -222,23 +255,28 @@ pub fn main() !void {
     const args_it = try std.process.argsAlloc(gpa_allocator);
     defer std.process.argsFree(gpa_allocator, args_it);
 
-    const command = if (args_it.len > 1) std.mem.span(args_it[1]) else "daemon";
+    const config = try parseConfig(gpa_allocator, args_it);
+    defer {
+        gpa_allocator.free(config.ban_map);
+        gpa_allocator.free(config.white_map);
+    }
+    const command = if (args_it.len > 1) std.mem.span(args_it[1]) else "monitor";
 
     if (mem.eql(u8, command, "monitor")) {
         std.log.info("Running one-time monitor check", .{});
         try monitor(gpa_allocator);
     } else if (mem.eql(u8, command, "cleanup")) {
         std.log.info("Running ban cleanup", .{});
-        try cleanupBans(gpa_allocator);
+        try cleanupBans(gpa_allocator, config);
     } else if (mem.eql(u8, command, "whitelist") and args_it.len > 2) {
-        try whitelistIP(gpa_allocator, std.mem.span(args_it[2]));
+        try whitelistIP(gpa_allocator, config, std.mem.span(args_it[2]));
     } else if (mem.eql(u8, command, "is-whitelisted") and args_it.len > 2) {
         const ip = std.mem.span(args_it[2]);
         std.log.info("{s} {s} is whitelisted", .{ if (isWhitelisted(ip)) "YES" else "NO", ip });
     } else if (mem.eql(u8, command, "ban") and args_it.len > 2) {
-        try banIP(gpa_allocator, std.mem.span(args_it[2]));
+        try banIP(gpa_allocator, config, std.mem.span(args_it[2]));
     } else if (mem.eql(u8, command, "unban") and args_it.len > 2) {
-        try unbanIP(gpa_allocator,std.mem.span(args_it[2]));
+        try unbanIP(gpa_allocator, config, std.mem.span(args_it[2]));
     } else {
         printUsage();
         std.process.exit(1);
