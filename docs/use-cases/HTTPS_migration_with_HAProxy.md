@@ -1,6 +1,6 @@
 # Migrate HTTPS from one server to another
 
-This can be done in general, can be used for migrating on same machine, or network, different software or different versions.
+Migrate http-a -> http-b on same or another machine on network. http-a and http-b can be different software(nginx,apache,caddy) or different versions of same
 
 # The migration
 
