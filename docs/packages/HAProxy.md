@@ -3,6 +3,19 @@
 # Install
 
 
+```sh
+# Add the HAProxy PPA
+add-apt-repository ppa:vbernat/haproxy-3.2 -y
+apt-get update
+apt-get install haproxy -y
+systemctl enable haproxy
+systemctl start haproxy
+```
+
+# Configuration
+
+- Configuration: `/etc/haproxy/haproxy.cfg`
+- test your config for syntax errors: `haproxy -c -f /etc/haproxy/haproxy.cfg`
 
 # PPA versus official
 

@@ -4,22 +4,12 @@ This can be done in general, can be used for migrating on same machine, or netwo
 
 # The migration
 
-Concrete case here is migrating domains with HTTPS from `nginx` to `Caddy` using `HAProxy`, doing it one by one to reduce service disruption.
+Concrete case here is migrating(one by one) domains with HTTPS from `nginx` to `Caddy` using `HAProxy`, to reduce service disruption.
 Also to have quick option to revert if new Caddy config for specific server has issues (websockets, integrations like PHP or ruby).
 
-**SNI** (Server Name Indication) makes this possible as it allows HAProxy to transparently forward HTTPS traffic without decryption or holding certificates (read more about it latenr in this document).
+**SNI** (Server Name Indication) makes this possible as it allows HAProxy to transparently forward HTTPS traffic without decryption or holding certificates ([read more](#sni-server-name-indication)).
 
-```sh
-# Add the HAProxy PPA
-add-apt-repository ppa:vbernat/haproxy-3.2 -y
-apt-get update
-apt-get install haproxy -y
-systemctl enable haproxy
-systemctl start haproxy
-```
-
-- Configuration: `/etc/haproxy/haproxy.cfg`
-- test your config for syntax errors: `haproxy -c -f /etc/haproxy/haproxy.cfg`
+Installation [instructions](../packages/HAProxy.md):
 
 ### Create a Map File
 
