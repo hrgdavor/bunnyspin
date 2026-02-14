@@ -1,21 +1,36 @@
 # bunnyspin
 
-TODO, move docker to obsolete or docker folder, and switch to https://linuxcontainers.org/incus/ as it has systemd and looks to be much better option.
-
-Here is a fun (at least for me) take on spinning up servers, whether it is provisioning or whatnot.
-
-I’ve gone all-in on [Bun](https://bun.sh) for this utility; its blazing-fast, batteries-included approach makes it the perfect engine for me when provisioning VPS servers or Docker images, and it should be an equally good fit for other Docker-compatible environments and even bare-metal servers.
+Here is a fun (at least for me) take on spinning up servers, whether it is provisioning a VPS/bare-metal, creating images and whatnot.
 
 It is wise to keep options open so you can spin up the same stack across different environments: development, CI/CD, staging, and production, without changing my flow. To squeeze as much as possible out of on-prem hardware, and mix it with VPSs or cloud providers wherever it makes practical and economic sense.
 
 **NOTE:** This is an Ubuntu-only zone for now. Whether it's a base image or bare metal, I’ve tuned everything for Ubuntu and don't have immediate plans to branch out to other flavours.
 
-**NOTE** Building multi-component images has downsides, leading to various caveats. And there are differences to account for when provisioning inside docker versus provisioning on a VPS. Speed of iteration and quick layering will offset the extra effort, and deepens the knowledge of docker itself.
+## Bun in bunnyspin
+
+I’ve gone all-in on [Bun](https://bun.sh) for this utility; its blazing-fast, batteries-included approach makes it the perfect engine for me when provisioning VPS servers or Docker images, and it should be an equally good fit for other Docker-compatible environments and even bare-metal servers.
+
+
 
 I am keeping an eye on https://github.com/pulumi/pulumi/issues/13904 pulumi and bun integration there.
 
+## Goals (some will change along the way)
+
+- Usable both for creating images and provisioning a VPS/bare-metal
+- Focus on ubuntu
+- Keeping stepping stones usable. As it exapnds some kind of framework will emerge (like it or not). 
+  - Specific lerned for making things work for provisioning should be mentioned in docs or comments
+  - Keep smallest units of work usable alone (or at leas simple to make standalone)
+  - try to take note of choices made (priorities, and scale it assumes, as others will have different)
+
 The project will not be publishing packages unless happens some need to do so, for now will use experience collected here and copy parts to real projects.
 
+# Docker (abandoned)
+
+Building multi-component images has downsides, leading to various caveats in Docker. There are differences to account for when provisioning inside docker versus provisioning on a VPS. 
+Speed of iteration and quick layering could have offset the extra effort (that deepens the knowledge of docker itself). 
+
+After discovering [incus](https://linuxcontainers.org/incus/) that does not seem to have those issues(systemd), docker is going in to project's obsolete pile.
 
 # Getting started
 
