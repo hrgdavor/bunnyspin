@@ -164,7 +164,12 @@ Bun isn't just a runtime; it’s a consolidated toolkit that replaces half a doz
 - **Lightning-Fast Test Runner**: Built-in and Jest-compatible, this runner is optimized for speed and low memory footprint. It’s perfect for running "smoke tests" against a newly provisioned server to ensure your configs, ports, and permissions are exactly where they should be.
 - **Native SQLite & File I/O**: Bun includes a high-performance SQLite driver and ultra-fast `Bun.write` and `Bun.file` APIs. This makes it trivial to log provisioning results, track state, or quickly read/write system configuration files without importing heavy external libraries.
 - **Zero-Config TypeScript**: (I personally have no plans to do so, at most will use .js and jsdoc). You can if you prefer even  run `.ts` files directly as scripts—no `tsc` or `ts-node` required. This means your provisioning logic can be type-safe from day one, which is a massive upgrade over brittle `.sh` scripts when things get complex.
-- **Growing list of built-ins** - S3, markdown, tar
+- **Growing list of built-ins** - 
+  - S3
+  - markdown
+  - tar
+  - MySQL, PG, SQLLite
+  - cron - crossplatform
 
 ## Python ?
 
