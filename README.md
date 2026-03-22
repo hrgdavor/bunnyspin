@@ -168,7 +168,7 @@ Bun isn't just a runtime; it’s a consolidated toolkit that replaces half a doz
   - S3
   - markdown
   - tar
-  - MySQL, PG, SQLLite
+  - MySQL, PG, SQLite
   - cron - crossplatform
 
 ## Python ?
