@@ -25,6 +25,7 @@ else
         mkdir -p /root/.bun/bin && cp /root/.bun-cache/bun /root/.bun/bin/bun; \
     fi
     cp /root/.bun/bin/bun ${BUN_CLI}
+    sudo chmod a+x ${BUN_CLI}
 fi
     `)
   await Bun.write(TMP_SCRIPT2, (await build({ entrypoints: [PROVISION_SCRIPT], target: "bun", sourcemap: "inline" })).outputs[0])
