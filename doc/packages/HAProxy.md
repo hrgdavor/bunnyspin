@@ -30,7 +30,8 @@ Current Version Gap (as of Feb 2026)
 
 # IP ban
 
-You **really should** use it unless you have something else in fromt of your HAProxy that does that already.
+You **really should** use it unless you have something else in front of your HAProxy that does that already.
+It is likely more efficinat to have HAProxy if you want ip bans, instead of doing it with (apache, Caddy, nginx,...)
 
 To efficiently manage a ban list that stays persistent, use HAProxy Map files combined with the Runtime API.
 
@@ -73,3 +74,65 @@ bun haproxy-ban.js ban 10.0.0.50
 # Unban an IP
 bun haproxy-ban.js unban 10.0.0.50
 ```
+
+# migration
+
+HAProxy can be used to migrate https too, for example from nginx to caddy without HAProxy handling the certs. 
+
+Create `/etc/haproxy/caddy_domains.lst`
+
+```
+support.domain.com 1
+other.domain.com 1
+```
+
+edit `/etc/haproxy/haproxy.cfg` and after config change or lsit changes check config `haproxy -c -f /etc/haproxy/haproxy.cfg` and tehn reload `systemctl reload haproxy`
+
+```
+# --- HTTP Frontend (Standard Forwarding) ---
+frontend main_http
+    bind *:80
+    mode http
+    acl is_caddy hdr(host),lower,map(/etc/haproxy/caddy_domains.lst) -m found
+    use_backend caddy_http if is_caddy
+    default_backend nginx_http
+
+# --- HTTPS Frontend (SSL Passthrough) ---
+frontend main_https
+    bind *:443
+    mode tcp
+    option tcplog
+    
+    # Wait for the SNI (Server Name) to be sent by the client
+    tcp-request inspect-delay 5s
+    tcp-request content accept if { req_ssl_hello_type 1 }
+
+    # ACL based on SNI
+    acl is_caddy_sni req_ssl_sni,lower,map(/etc/haproxy/caddy_domains.lst) -m found
+    
+    use_backend caddy_https if is_caddy_sni
+    default_backend nginx_https
+
+# --- Backends ---
+backend nginx_http
+    mode http
+    server nginx_srv 127.0.0.1:1080 check
+
+backend nginx_https
+    mode tcp
+    server nginx_srv 127.0.0.1:1443 check
+
+backend caddy_http
+    mode http
+    server caddy_srv 127.0.0.1:2080 check
+
+backend caddy_https
+    mode tcp
+    server caddy_srv 127.0.0.1:2443 check
+```
+
+it is critical to not forget in http defintion to use `mode tcp`
+
+> you may get error: The **ERR_SSL_PROTOCOL_ERROR** 
+> it occurs because HAProxy is likely trying to "speak" HTTP to a port that Nginx or Caddy expects to be encrypted (or vice-versa), or you are using the ssl keyword on a backend when > you actually want SSL Passthrough. 
+> Since HAProxy has no certs, it must operate in mode tcp for port 443 to pass the encrypted data directly to your backends.

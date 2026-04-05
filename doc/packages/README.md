@@ -18,7 +18,7 @@ for developing provision scripts is not a big ask)
 ## WEB
 
 - [HAProxy](./HAProxy.md) load balancer (that is also useful for HTTPS migration) 
-- Caddy 
+- [Caddy](Caddy.md)
 - [PHP](./php.md)
 
 ## databases
