@@ -10,7 +10,7 @@ It is wise to keep options open so you can spin up the same stack across differe
 
 I’ve gone all-in on [Bun](https://bun.sh) for this utility; its blazing-fast, batteries-included approach makes it the perfect engine for me when provisioning VPS servers or Docker images, and it should be an equally good fit for other Docker-compatible environments and even bare-metal servers.
 
-*I am keeping an eye on https://github.com/pulumi/pulumi/issues/13904 pulumi and bun integration there.*
+> Pulumi also supports **Bun**: https://www.pulumi.com/blog/introducing-bun-as-a-runtime-for-pulumi/
 
 ## Goals (some will change along the way)
 
