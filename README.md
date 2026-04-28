@@ -2,7 +2,7 @@
 
 Here is a fun (at least for me) take on spinning up servers, whether it is provisioning a VPS/bare-metal, creating images and whatnot.
 
-It is wise to keep options open so you can spin up the same stack across different environments: development, CI/CD, staging, and production, without changing my flow. To squeeze as much as possible out of on-prem hardware, and mix it with VPSs or cloud providers wherever it makes practical and economic sense.
+Ideally you can spin up the same stack on either local dev, staging, or prod. Utilize your own hardware and stay flexible to plug into a VPS or the cloud when the price and performance are right.
 
 **NOTE:** This is an Ubuntu-only zone for now. Whether it's a base image or bare metal, I’ve tuned everything for Ubuntu and don't have immediate plans to branch out to other flavours.
 
