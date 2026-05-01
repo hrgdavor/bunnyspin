@@ -6,6 +6,8 @@ Ideally you can spin up the same stack on either local dev, staging, or prod. Ut
 
 **NOTE:** This is an Ubuntu-only zone for now. Whether it's a base image or bare metal, I’ve tuned everything for Ubuntu and don't have immediate plans to branch out to other flavours.
 
+> There is a chance [YavaScript ](https://github.com/suchipi/yavascript) will be supported (or [zig-quickjs-ng](https://github.com/mitchellh/zig-quickjs-ng)), as it likely capable of doing most of the tasks regarding provisioning. It is less than 4MB versus Bun 100MB because it does not provide nodejs layer. Read more about it in (doc/bun.light.md).
+
 ## Bun in bunnyspin
 
 I’ve gone all-in on [Bun](https://bun.sh) for this utility; its blazing-fast, batteries-included approach makes it the perfect engine for me when provisioning VPS servers or Docker images, and it should be an equally good fit for other Docker-compatible environments and even bare-metal servers.
