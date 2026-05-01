@@ -1,12 +1,45 @@
 import { $ } from "bun";
 import { existsSync, mkdirSync, readdirSync, statSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import nodemailer from "nodemailer";
 
 export const CONFIG = {
-  JENKINS_WAR: "/usr/share/java/jenkins.war",
-  JENKINS_HOME: "/var/lib/jenkins",
-  BACKUP_BASE: "/opt/jenkins_backups",
+  JENKINS_WAR: process.env.JENKINS_WAR || "/usr/share/java/jenkins.war",
+  JENKINS_HOME: process.env.JENKINS_HOME || "/var/lib/jenkins",
+  BACKUP_BASE: process.env.BACKUP_BASE || "/opt/jenkins_backups",
+  // SMTP Config - Best to move these to environment variables later
+  SMTP: {
+    host: process.env.SMTP_HOST || '127.0.0.1',
+    port: process.env.SMTP_PORT || 465, // 465 Implicit TLS, 587 Explicit (STARTTLS)
+    secure: (process.env.SMTP_SECURE ?? "true") === "true",
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  },
+  NOTIFY_EMAIL: process.env.NOTIFY_EMAIL
 };
+
+/**
+ * Sends an email notification
+ */
+export async function sendEmail(subject, text) {
+  if (!CONFIG.NOTIFY_EMAIL) return;
+
+  const transporter = nodemailer.createTransport(CONFIG.SMTP);
+
+  try {
+    await transporter.sendMail({
+      from: `"Jenkins Auto-Updater" <${CONFIG.SMTP.auth.user}>`,
+      to: CONFIG.NOTIFY_EMAIL,
+      subject: subject,
+      text: text,
+    });
+    console.log("📧 Notification email sent.");
+  } catch (error) {
+    console.error("❌ Failed to send email:", error.message);
+  }
+}
 
 /**
  * Deletes backup folders older than X days
@@ -54,7 +87,11 @@ export async function performBackup(backupDir) {
 }
 
 export async function revert(backupDir) {
-  console.error("\n⚠️ Reverting to previous state...");
+  const msg = `Jenkins update failed. Reverting to backup: ${backupDir}`;
+  console.error(`\n⚠️ ${msg}`);
+
+  await sendEmail("Jenkins Update FAILED - Reverting", msg);
+
   await stopJenkins();
   await $`cp ${backupDir}/jenkins.war ${CONFIG.JENKINS_WAR}`;
   await $`rm -rf ${CONFIG.JENKINS_HOME}/*`;
