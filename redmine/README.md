@@ -1,3 +1,3 @@
 # redmine
 
-Notes about isntallation backup and upgrade
+Notes about installation backup and upgrade

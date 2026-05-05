@@ -2,3 +2,4 @@ ubuntu-bin
 deploy
 node_modules
 .zig-cache
+.keys

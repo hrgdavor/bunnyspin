@@ -1,6 +1,13 @@
+# Neat idea, low priority, likely unnecessary
+
+Bun was chosen, as it is actively developed and used a lot. So it is tested in the use-cases we need it too.
+Lighter compact bun without nodejs stuff would be efficient and compact, just there is not enought time ATM to chase this.
+As an idea it is worth at least contempalting and exploring a bit. Bun also does sanitation for shell exec, so making a copy of its functionality is less attractive while bun is actively developed. The 100MB bun file size for now is an acceptable compromise for using and actively developed and mature tool.
+
+
 ## Initial proposal
 
-**ZJS (Zig-JS Shell)**
+**Bun-light (bunl) or ZJS (Zig-JS Shell)**
 
 **Objective:** 
 - < 5MB single-binary runner 
@@ -65,7 +72,7 @@ To ensure this is reliable for provisioning, your test suite must cover:
 
 1. **Process Isolation:** Verify that environment variables passed to `$` do not leak into the parent process unless intended.
 2. **Bytecode Portability:** Compile bytecode on one Linux distro (e.g., Ubuntu) and ensure it runs on another (e.g., Alpine/musl) using your stub.
-3. **Error Propagation:** Ensure a non-zero exit code in a shell command correctly throws a JS Exception (matching Bun/YavaScript behavior).
+3. **Error Propagation:** Ensure a non-zero exit code in a shell command correctly throws a JS Exception (matching Bun/JavaScript behavior).
 4. **Memory Pressure:** Run a provisioning loop of 1,000 shell commands to ensure the Zig-to-C-to-JS bridge isn't leaking file descriptors or memory.
 
 Leveraging the Bun Codebase
@@ -74,8 +81,162 @@ You can "mine" the Bun source for these specific high-value components:
 
 1. **`src/shell/`**: Look at how they handle glob expansion (`*.js`). This is complex in C/Zig but already solved in Bun.
 2. **`src/bun.js/node-fs`**: If you want Node.js compatibility, their `fs` wrappers are the gold standard for performance.
-3. **`src/io/`**: Reference their use of `io_uring` for Linux if you decide to make your shell asynchronous later.
+3. **`src/io/`:** Reference their use of `io_uring` for Linux if you decide to make your shell asynchronous later.
 
+------
+
+Testing the Shell API (`$`) with Bun
+
+The patterns below show how to verify each `$` behavior using Bun's test runner (`bun:test`) before implementing Zig/QuickJS parity. Copy them into `src/shell.test.js` and run with `bun test`.
+
+## 1. Basic stdout capture
+
+```js
+import { test, expect } from "bun:test";
+
+test("$ returns stdout as a string when accessed", async () => {
+  const result = $`echo hello`;
+  expect(result.stdout.toString()).toContain("hello");
+});
+```
+
+When building `zjs`, verify that invoking a command captures stdout identically — i.e., the returned object's `stdout` contains the raw bytes produced by the child process.
+
+## 2. Stderr capture
+
+```js
+import { test, expect } from "bun:test";
+
+test("$ captures stderr separately", async () => {
+  const result = $`sh -c 'echo err >&2; echo out'`;
+  expect(result.stdout.toString().trim()).toBe("out");
+  expect(result.stderr.toString().trim()).toBe("err");
+});
+```
+
+Your Zig bridge must also keep stdout and stderr on **separate buffers** (do not merge them). Verify that `stderr` does not leak into `stdout`.
+
+## 3. Exit code propagation
+
+```js
+import { test, expect } from "bun:test";
+
+test("$ throws on non-zero exit code", async () => {
+  await expect($`sh -c 'exit 42'`).rejects.toThrow();
+});
+
+test("$.quiet() suppresses the throw", async () => {
+  const result = await $`sh -c 'exit 42'`.quiet();
+  expect(result.exitCode).toBe(42);
+});
+```
+
+When implementing feature parity, the `$` function must throw on non-zero exit codes by default, but support `.quiet()` to suppress the throw. The `zjs` stub must replicate this contract.
+
+## 4. Environment variable injection
+
+```js
+import { test, expect } from "bun:test";
+
+test("$ passes env to child process", async () => {
+  const result = $`sh -c 'echo $MYVAR'`, { env: { MYVAR: "secret" } };
+  expect(result.stdout.toString().trim()).toBe("secret");
+});
+```
+
+Verify that an object passed as the second argument merges into the child's environment **without** polluting the parent process.
+
+## 5. Glob expansion
+
+```js
+import { test, expect } from "bun:test";
+import { writeFileSync, mkdirSync, rmSync } from "node:fs";
+
+test("$ expands globs before executing", async () => {
+  mkdirSync("/tmp/globtest", { recursive: true });
+  writeFileSync("/tmp/globtest/a.txt", "a");
+  writeFileSync("/tmp/globtest/b.txt", "b");
+  const result = $`cat /tmp/globtest/*.txt`;
+  expect(result.stdout.toString()).toContain("a");
+  expect(result.stdout.toString()).toContain("b");
+  rmSync("/tmp/globtest", { recursive: true, force: true });
+});
+```
+
+Bun's shell expands globs before executing the command. This is a **high-value** test because glob expansion is complex. Your `zjs` implementation must either replicate this logic or delegate to a POSIX shell (`sh -c`) with glob expansion enabled.
+
+## 6. Tagged template interpolation
+
+```js
+import { test, expect } from "bun:test";
+
+test("$ interpolates variables correctly", async () => {
+  const file = "test.txt";
+  const result = $`ls "${file}"`;
+  expect(result.exitCode).toBe(0);
+});
+
+test("$ prevents injection by quoting interpolations", async () => {
+  const malicious = "'; rm -rf /; echo'";
+  // The command should execute literally, not as injected shell code
+  const result = $`echo ${malicious}`;
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).toContain("'; rm -rf /; echo");
+});
+```
+
+Bun's `$` **sanitises interpolated values** by quoting them. This is the most important parity check — if `zjs` naively concatenates strings, it will be vulnerable to shell injection.
+
+## 7. `.text()` and `.json()` helpers
+
+```js
+import { test, expect } from "bun:test";
+
+test("$.json() parses response body", async () => {
+  const result = await $`echo '{\"a\":1}'`.json();
+  expect(result).toEqual({ a: 1 });
+});
+
+test("$.text() returns the string body", async () => {
+  const result = await $`echo hello`.text();
+  expect(result).toBe("hello\n");
+});
+```
+
+These convenience methods return parsed output directly. The `zjs` stub should expose the same helpers.
+
+## 8. Memory pressure / fd leak test
+
+```js
+import { test } from "bun:test";
+
+test("repeated $ calls do not leak file descriptors", async () => {
+  for (let i = 0; i < 1000; i++) {
+    await $`echo test`;
+  }
+  // If this test completes without hitting OS fd limits, we're good.
+  // In CI you can also check /proc/self/fd before/after and assert the count matches.
+});
+```
+
+This is a regression test for memory/fd leaks in your Zig-to-JS bridge. Run it in CI with `ulimit -n` set low (e.g., 2048) to fail fast if descriptors leak.
+
+## Summary: parity checklist
+
+| Feature              | Bun behavior                          | zjs target                    |
+| -------------------- | ------------------------------------- | ----------------------------- |
+| `$` returns object   | `{ stdout, stderr, exitCode, ... }`  | same object shape             |
+| Non-zero exit        | throws                                | same                          |
+| `.quiet()`           | suppresses throw                      | same                          |
+| `.text()` / `.json()`| parse helpers                         | same                          |
+| Glob expansion       | expands `*`, `**` before exec         | replicate or use `sh -c`      |
+| Interpolation safety | quotes interpolated values            | **critical** — no injection   |
+| Env injection        | merges child env, parent untouched    | same                          |
+| fd / memory stability| no leaks across thousands of invocations | verify with loop test above |
+
+These tests should live alongside your source files (e.g. `src/shell.test.js`) so they run with `bun test` during development. Once ported to your Zig project, translate each pattern to the equivalent test framework assertion. For bytecode tests, compile on one host, copy the `.bin` to another, and execute it to confirm cross-distro portability.
+
+------
 
 # Addon (Compiler & Bundler)
 
