@@ -80,7 +80,7 @@ The `key-manager.js` utility provides several commands to automate these steps:
 ### Example: Automation User Setup
 To set up a local user `jenkins` to connect to `fgks-dev` as the remote user `deploy`:
 
-```bash
+```sh
 # 1. Create the key
 bun src/apps/key-manager/key-manager.js create key1
 
