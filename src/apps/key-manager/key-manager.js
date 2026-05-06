@@ -136,7 +136,7 @@ class KeyManager {
     console.log(`Setting up user ${username} and group ${group} on ${host}`);
     await this.remoteExec(host, `sudo groupadd -f ${group}`);
     await this.remoteExec(host, `sudo useradd -m -g ${group} -s /bin/bash ${username} || true`);
-    
+
     const home = await this.getUserHome(username, host);
     const sshDir = `${home}/.ssh`;
 
@@ -191,14 +191,14 @@ class KeyManager {
    */
   async setupLocalUser(localUser, keyName) {
     console.log(`Configuring local user ${localUser} with key ${keyName}`);
-    
+
     // Ensure user exists first
     try {
       await $`id -u ${localUser}`.quiet();
     } catch (e) {
       await $`sudo useradd -m -s /bin/bash ${localUser}`.quiet();
     }
-    
+
     const home = await this.getUserHome(localUser);
     console.log(`Resolved local home for ${localUser}: ${home}`);
     const keyPath = join(this.keyDir, keyName);
@@ -226,18 +226,18 @@ class KeyManager {
   /**
    * Configures a Host entry in a local user's SSH config.
    * @param {string} localUser - Local username.
-   * @param {string} hostAlias - The host alias (e.g., fgks-dev).
+   * @param {string} hostAlias - The host alias (e.g., srv-dev).
    * @param {string} remoteUser - The remote username.
    * @param {string} keyName - Name of the key in .keys/
    */
   async configureLocalSsh(localUser, hostAlias, remoteUser, keyName) {
     console.log(`Configuring SSH config for local user ${localUser} (alias: ${hostAlias})`);
-    
+
     // Resolve existing host info (HostName, Port, etc.)
     const hostInfo = await this.resolveHostInfo(hostAlias);
     const hostName = hostInfo?.hostname || hostAlias;
     const port = hostInfo?.port || "22";
-    
+
     const home = await this.getUserHome(localUser);
     console.log(`Resolved local home for ${localUser}: ${home}`);
     const userSshDir = join(home, ".ssh");
