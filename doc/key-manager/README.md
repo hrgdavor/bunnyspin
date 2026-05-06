@@ -68,14 +68,14 @@ Load key "/root/.ssh/somekey": bad permissions
 
 The `key-manager.js` utility provides several commands to automate these steps:
 
-| Command | Description |
-| --- | --- |
-| `create <name>` | Generates a new local SSH key pair in the `.keys/` directory. |
-| `setup-local <luser> <key>` | Sets up a local user with the specified private key. |
-| `configure-ssh <lu> <ha> <ru> <k>` | Adds a Host entry to the local user's SSH config. |
-| `setup <host> <user> <group>` | Creates a user and group on a remote host. |
-| `authorize <host> <user> <key>` | Uploads and authorizes a public key for a remote user. |
-| `share <host> <path> <u1> <u2>` | Configures ACLs for shared access on a remote path. |
+| Command                            | Description                                                   |
+| ---------------------------------- | ------------------------------------------------------------- |
+| `create <name>`                    | Generates a new local SSH key pair in the `.keys/` directory. |
+| `setup-local <luser> <key>`        | Sets up a local user with the specified private key.          |
+| `configure-ssh <lu> <ha> <ru> <k>` | Adds a Host entry to the local user's SSH config.             |
+| `setup <host> <user> <group>`      | Creates a user and group on a remote host.                    |
+| `authorize <host> <user> <key>`    | Uploads and authorizes a public key for a remote user.        |
+| `share <host> <path> <u1> <u2>`    | Configures ACLs for shared access on a remote path.           |
 
 ### Example: Automation User Setup
 To set up a local user `jenkins` to connect to `fgks-dev` as the remote user `deploy`:
