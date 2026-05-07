@@ -11,9 +11,92 @@ import { join } from "node:path";
 class KeyManager {
   constructor(config = {}) {
     this.keyDir = config.keyDir || join(process.cwd(), ".keys");
-    if (!existsSync(this.keyDir)) {
-      mkdirSync(this.keyDir, { recursive: true });
+    this.dryRun = config.dryRun || false;
+    this.ensureDir(this.keyDir);
+  }
+
+  /**
+   * Ensures a local directory exists, respecting dry run.
+   * @param {string} path 
+   */
+  ensureDir(path) {
+    if (!existsSync(path)) {
+      console.log(`mkdir -p ${path}`);
+      if (!this.dryRun) {
+        mkdirSync(path, { recursive: true });
+      }
     }
+  }
+
+  /**
+   * Logs and optionally executes a local command.
+   * @param {string} description 
+   * @param {string|string[]} cmd - Command string or array of args.
+   */
+  async localExec(description, cmd) {
+    if (description) console.log(`# ${description}`);
+    const fullCmd = Array.isArray(cmd) ? cmd.join(" ") : cmd;
+    console.log(fullCmd);
+
+    if (this.dryRun) return { stdout: "", stderr: "" };
+
+    try {
+      const proc = Array.isArray(cmd) ? Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" }) : Bun.spawn(["sh", "-c", cmd], { stdout: "pipe", stderr: "pipe" });
+      const stdout = await new Response(proc.stdout).text();
+      const stderr = await new Response(proc.stderr).text();
+      const exitCode = await proc.exited;
+      if (exitCode !== 0) {
+        const err = new Error(`Local command failed with exit code ${exitCode}`);
+        err.stderr = stderr;
+        err.stdout = stdout;
+        throw err;
+      }
+      return { stdout, stderr };
+    } catch (err) {
+      throw err;
+    }
+  }
+
+  /**
+   * Executes a command on a remote host via SSH.
+   * @param {string} host - Remote host (e.g., user@host).
+   * @param {string} command - Command to execute.
+   * @param {object} options - Options for execution.
+   */
+  async remoteExec(host, command, options = {}) {
+    const isQuiet = options.quiet || false;
+    const sshCmd = ["ssh", "-T", "-o", "RemoteCommand=none", host, command];
+
+    if (!isQuiet) {
+      console.log(`# Executing on ${host}`);
+      console.log(`ssh -T -o "RemoteCommand=none" ${host} ${JSON.stringify(command)}`);
+    }
+
+    if (this.dryRun && !options.force) {
+      return { stdout: "", stderr: "" };
+    }
+
+    const proc = Bun.spawn(sshCmd, {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    const exitCode = await proc.exited;
+
+    if (exitCode !== 0) {
+      if (!isQuiet && stderr.trim()) {
+        console.error(`--- SSH Error Output ---`);
+        console.error(stderr);
+        console.error(`-----------------------`);
+      }
+      const err = new Error(`SSH failed with exit code ${exitCode}`);
+      err.stderr = stderr;
+      err.stdout = stdout;
+      throw err;
+    }
+    return { stdout, stderr };
   }
 
   /**
@@ -25,22 +108,27 @@ class KeyManager {
     const cmd = `getent passwd ${username} | cut -d: -f6`;
     let home = "";
 
-    if (host) {
-      const { stdout } = await this.remoteExec(host, cmd);
-      home = stdout.trim();
-    } else {
-      const proc = Bun.spawn(["sh", "-c", cmd], { stdout: "pipe" });
-      home = (await new Response(proc.stdout).text()).trim();
+    try {
+      if (host) {
+        // Force execution even in dry run to get correct paths for output
+        const { stdout } = await this.remoteExec(host, cmd, { quiet: true, force: true });
+        home = stdout.trim();
+      } else {
+        const proc = Bun.spawn(["sh", "-c", cmd], { stdout: "pipe" });
+        home = (await new Response(proc.stdout).text()).trim();
 
-      // Fallback for some systems where getent might be missing or incomplete
-      if (!home) {
-        const fallbackProc = Bun.spawn(["sh", "-c", `eval echo ~${username}`], { stdout: "pipe" });
-        home = (await new Response(fallbackProc.stdout).text()).trim();
+        if (!home) {
+          const fallbackProc = Bun.spawn(["sh", "-c", `eval echo ~${username}`], { stdout: "pipe" });
+          home = (await new Response(fallbackProc.stdout).text()).trim();
+        }
       }
+    } catch (e) {
+      // Fallback if user doesn't exist yet
+      home = `/home/${username}`;
     }
 
     if (!home || home === `~${username}`) {
-      throw new Error(`Could not resolve home directory for user "${username}"${host ? ` on ${host}` : " locally"}.`);
+      home = `/home/${username}`;
     }
     return home;
   }
@@ -72,22 +160,13 @@ class KeyManager {
   async createKeyPair(name) {
     const keyPath = join(this.keyDir, name);
     if (existsSync(keyPath)) {
-      console.warn(`Key ${name} already exists. Skipping generation. ${keyPath}`);
+      console.warn(`# Key ${name} already exists. Skipping generation. ${keyPath}`);
     } else {
-      console.log(`Generating key pair: ${name} to ${keyPath}`);
-      const proc = Bun.spawn(["ssh-keygen", "-t", "ed25519", "-f", keyPath, "-N", "", "-C", `${name}@bunnyspin`], {
-        stderr: "pipe",
-      });
-      const stderr = await new Response(proc.stderr).text();
-      const exitCode = await proc.exited;
-
-      if (exitCode !== 0) {
-        if (stderr.trim()) console.error(stderr);
-        const err = new Error(`Failed with exit code ${exitCode}`);
-        err.stderr = stderr;
-        throw err;
-      }
+      const cmd = ["ssh-keygen", "-t", "ed25519", "-f", keyPath, "-N", "", "-C", `${name}@bunnyspin`];
+      await this.localExec(`Generating key pair: ${name}`, cmd);
     }
+
+    if (this.dryRun) return { publicKey: "DRY_RUN_PUBLIC_KEY", privateKeyPath: keyPath };
 
     const publicKey = await Bun.file(`${keyPath}.pub`).text();
     return {
@@ -97,43 +176,12 @@ class KeyManager {
   }
 
   /**
-   * Executes a command on a remote host via SSH.
-   * @param {string} host - Remote host (e.g., user@host).
-   * @param {string} command - Command to execute.
-   */
-  async remoteExec(host, command) {
-    console.log(`Executing on ${host}: ${command}`);
-    const proc = Bun.spawn(["ssh", "-T", "-o", "RemoteCommand=none", host, command], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-
-    const stdout = await new Response(proc.stdout).text();
-    const stderr = await new Response(proc.stderr).text();
-    const exitCode = await proc.exited;
-
-    if (exitCode !== 0) {
-      if (stderr.trim()) {
-        console.error(`--- SSH Error Output ---`);
-        console.error(stderr);
-        console.error(`-----------------------`);
-      }
-      const err = new Error(`Failed with exit code ${exitCode}`);
-      err.stderr = stderr;
-      err.stdout = stdout;
-      throw err;
-    }
-    return { stdout, stderr };
-  }
-
-  /**
    * Creates a user and group on a remote host.
    * @param {string} host - Remote host (with sudo access).
    * @param {string} username 
    * @param {string} group 
    */
   async setupRemoteUser(host, username, group) {
-    console.log(`Setting up user ${username} and group ${group} on ${host}`);
     await this.remoteExec(host, `sudo groupadd -f ${group}`);
     await this.remoteExec(host, `sudo useradd -m -g ${group} -s /bin/bash ${username} || true`);
 
@@ -141,12 +189,12 @@ class KeyManager {
     const sshDir = `${home}/.ssh`;
 
     const commands = [
-      `sudo mkdir -p ${sshDir}`,
-      `sudo chmod 700 ${sshDir}`,
-      `sudo chown ${username}:${group} ${sshDir}`
+      [`sudo mkdir -p ${sshDir}`, `Ensuring .ssh directory for ${username} on ${host}`],
+      [`sudo chmod 700 ${sshDir}`, `Setting permissions for .ssh directory`],
+      [`sudo chown ${username}:${group} ${sshDir}`, `Setting ownership for .ssh directory`]
     ];
 
-    for (const cmd of commands) {
+    for (const [cmd, desc] of commands) {
       await this.remoteExec(host, cmd);
     }
   }
@@ -158,7 +206,6 @@ class KeyManager {
    * @param {string} publicKey - Public key content.
    */
   async authorizeKey(host, username, publicKey) {
-    console.log(`Authorizing key for ${username} on ${host}`);
     const home = await this.getUserHome(username, host);
     const authFile = `${home}/.ssh/authorized_keys`;
     const command = `echo "${publicKey}" | sudo tee -a ${authFile} > /dev/null && sudo chmod 600 ${authFile} && sudo chown ${username} ${authFile}`;
@@ -173,13 +220,11 @@ class KeyManager {
    * @param {string} permissions - e.g., "rwx"
    */
   async setAcl(host, path, users, permissions = "rwx") {
-    console.log(`Setting ACLs on ${path} for ${users.join(", ")}`);
     // Ensure ACL is installed and apply it
     let aclCmd = `sudo setfacl -R -m `;
     const entries = users.map(u => `u:${u}:${permissions}`).join(",");
     const defaultEntries = users.map(u => `d:u:${u}:${permissions}`).join(",");
 
-    // Apply to current files and set defaults for new files
     await this.remoteExec(host, `${aclCmd}${entries} ${path}`);
     await this.remoteExec(host, `${aclCmd}${defaultEntries} ${path}`);
   }
@@ -190,37 +235,23 @@ class KeyManager {
    * @param {string} keyName - Name of the key in .keys/
    */
   async setupLocalUser(localUser, keyName) {
-    console.log(`Configuring local user ${localUser} with key ${keyName}`);
-
     // Ensure user exists first
     try {
-      await $`id -u ${localUser}`.quiet();
+      await this.localExec(`Checking if user ${localUser} exists`, `id -u ${localUser}`);
     } catch (e) {
-      await $`sudo useradd -m -s /bin/bash ${localUser}`.quiet();
+      await this.localExec(`Creating local user ${localUser}`, `sudo useradd -m -s /bin/bash ${localUser}`);
     }
 
     const home = await this.getUserHome(localUser);
-    console.log(`Resolved local home for ${localUser}: ${home}`);
     const keyPath = join(this.keyDir, keyName);
     const userSshDir = join(home, ".ssh");
     const targetKeyPath = join(userSshDir, `id_ed25519_${keyName}`);
 
-    if (!existsSync(keyPath)) {
-      throw new Error(`Key file not found: ${keyPath}`);
-    }
-
-    const commands = [
-      `sudo mkdir -p ${userSshDir}`,
-      `sudo cp ${keyPath} ${targetKeyPath}`,
-      `sudo chown -R ${localUser}:${localUser} ${userSshDir}`,
-      `sudo chmod 700 ${userSshDir}`,
-      `sudo chmod 600 ${targetKeyPath}`
-    ];
-
-    for (const cmd of commands) {
-      // Using sh -c to handle sudo and complex strings locally
-      await $`sh -c ${cmd}`.quiet();
-    }
+    await this.localExec(`Ensuring .ssh directory for ${localUser}`, `sudo mkdir -p ${userSshDir}`);
+    await this.localExec(`Deploying private key ${keyName} to ${localUser}`, `sudo cp ${keyPath} ${targetKeyPath}`);
+    await this.localExec(`Setting ownership for .ssh directory`, `sudo chown -R ${localUser}:${localUser} ${userSshDir}`);
+    await this.localExec(`Setting permissions for .ssh directory`, `sudo chmod 700 ${userSshDir}`);
+    await this.localExec(`Setting permissions for private key`, `sudo chmod 600 ${targetKeyPath}`);
   }
 
   /**
@@ -231,62 +262,62 @@ class KeyManager {
    * @param {string} keyName - Name of the key in .keys/
    */
   async configureLocalSsh(localUser, hostAlias, remoteUser, keyName) {
-    console.log(`Configuring SSH config for local user ${localUser} (alias: ${hostAlias})`);
-
     // Resolve existing host info (HostName, Port, etc.)
     const hostInfo = await this.resolveHostInfo(hostAlias);
     const hostName = hostInfo?.hostname || hostAlias;
     const port = hostInfo?.port || "22";
 
     const home = await this.getUserHome(localUser);
-    console.log(`Resolved local home for ${localUser}: ${home}`);
     const userSshDir = join(home, ".ssh");
     const configFile = join(userSshDir, "config");
     const targetKeyPath = join(userSshDir, `id_ed25519_${keyName}`);
 
     const configEntry = `\nHost ${hostAlias}\n  HostName ${hostName}\n  Port ${port}\n  User ${remoteUser}\n  IdentityFile ${targetKeyPath}\n  StrictHostKeyChecking accept-new\n  LogLevel ERROR\n`;
 
-    // Ensure the config file exists and append the entry
     const command = `sudo touch ${configFile} && echo "${configEntry}" | sudo tee -a ${configFile} > /dev/null && sudo chown ${localUser}:${localUser} ${configFile} && sudo chmod 600 ${configFile}`;
-    await $`sh -c ${command}`.quiet();
+    await this.localExec(`Configuring SSH config for ${localUser} (alias: ${hostAlias})`, command);
 
-    // Pre-scan host key to avoid interactive prompts
-    console.log(`Scanning host key for ${hostAlias} (${hostName}:${port})...`);
     const knownHostsFile = join(userSshDir, "known_hosts");
     const scanCmd = `ssh-keyscan -p ${port} ${hostAlias},${hostName} 2>/dev/null | sudo tee -a ${knownHostsFile} > /dev/null && sudo chown ${localUser}:${localUser} ${knownHostsFile} && sudo chmod 644 ${knownHostsFile}`;
-    await $`sh -c ${scanCmd}`.quiet();
+    await this.localExec(`Scanning host key for ${hostAlias}`, scanCmd);
   }
 }
 
 // CLI entry point (example usage)
 if (import.meta.main) {
-  const manager = new KeyManager();
   const args = process.argv.slice(2);
-  const command = args[0];
+  const dryRun = args.includes("--dry-run") || args.includes("-d");
+  const filteredArgs = args.filter(a => a !== "--dry-run" && a !== "-d");
+
+  const manager = new KeyManager({ dryRun });
+  const command = filteredArgs[0];
 
   try {
     if (command === "create") {
-      const name = args[1];
+      const name = filteredArgs[1];
       await manager.createKeyPair(name);
     } else if (command === "setup") {
-      const [host, user, group] = args.slice(1);
+      const [host, user, group] = filteredArgs.slice(1);
       await manager.setupRemoteUser(host, user, group);
     } else if (command === "authorize") {
-      const [host, user, keyName] = args.slice(1);
+      const [host, user, keyName] = filteredArgs.slice(1);
       const keyPath = join(manager.keyDir, `${keyName}.pub`);
-      const publicKey = await Bun.file(keyPath).text();
+      let publicKey = "DRY_RUN_PUBLIC_KEY";
+      if (!dryRun) {
+        publicKey = await Bun.file(keyPath).text();
+      }
       await manager.authorizeKey(host, user, publicKey.trim());
     } else if (command === "share") {
-      const [host, path, ...users] = args.slice(1);
+      const [host, path, ...users] = filteredArgs.slice(1);
       await manager.setAcl(host, path, users);
     } else if (command === "setup-local") {
-      const [localUser, keyName] = args.slice(1);
+      const [localUser, keyName] = filteredArgs.slice(1);
       await manager.setupLocalUser(localUser, keyName);
     } else if (command === "configure-ssh") {
-      const [localUser, hostAlias, remoteUser, keyName] = args.slice(1);
+      const [localUser, hostAlias, remoteUser, keyName] = filteredArgs.slice(1);
       await manager.configureLocalSsh(localUser, hostAlias, remoteUser, keyName);
     } else {
-      console.log("Usage: key-manager <command> [args]");
+      console.log("Usage: key-manager <command> [args] [--dry-run|-d]");
       console.log("Commands:");
       console.log("  create <name>                   - Create a local key pair");
       console.log("  setup <host> <user> <group>    - Create remote user/group");
@@ -296,9 +327,11 @@ if (import.meta.main) {
       console.log("  configure-ssh <luser> <host-alias> <ruser> <key> - Add Host entry to local user config");
     }
   } catch (err) {
-    console.error("Error:", err.message);
-    if (err.stderr) {
-      console.error(err.stderr.toString());
+    if (!dryRun) {
+      console.error("Error:", err.message);
+      if (err.stderr) {
+        console.error(err.stderr.toString());
+      }
     }
   }
 }

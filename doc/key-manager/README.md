@@ -93,3 +93,17 @@ bun src/apps/key-manager/key-manager.js configure-ssh jenkins fgks-dev deploy ke
 # 4. Authorize the key for 'deploy' on the remote server
 bun src/apps/key-manager/key-manager.js authorize fgks-dev deploy key1
 ```
+
+## Dry Run Mode
+
+The utility supports a `--dry-run` (or `-d`) flag that can be used with any command (and can be placed anywhere in the argument list). 
+
+### Benefits
+- **Visual Validation**: Review every local and remote command before it's executed to ensure correctness.
+- **Shell-Compatible Output**: The output is formatted as a valid shell script (with `#` comments and quoted commands). You can copy-paste the output directly into a terminal.
+- **Manual Orchestration**: If you prefer not to give the script direct SSH access to your servers, you can run it locally with `--dry-run` to generate the sequence of commands, then execute them manually on the target systems.
+
+### Usage
+```sh
+bun src/apps/key-manager/key-manager.js --dry-run setup-local jenkins key1
+```
